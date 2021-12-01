@@ -1,5 +1,5 @@
 ---
-title: "p8105_hw6_rt2640"
+title: "p8105_HW6_rt2640"
 author: "Riddhi Thakkar"
 date: "11/30/2021"
 output: github_document
@@ -119,5 +119,22 @@ rmse_data %>%
 
 Model 1 is a model using length at birth and gestational age as main effects predictors and model 2 is a model using head circumference, length, sex and all their internal interactions. Guess is the model using a very truncated verison of backward elimination.
 
+
+
+## Problem 2
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
 
 
