@@ -5,7 +5,7 @@ date: "11/30/2021"
 output: github_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup}
 library(tidyverse)
 library(modelr)
 library(mgcv)
@@ -26,4 +26,98 @@ theme_set(theme_minimal() + theme(legend.position = "bottom"))
 set.seed(1)
 
 ```
+
+
+### Question 1
+
+```{r}
+birthweight = read_csv("./data/birthweight.csv")
+```
+
+```{r}
+bw_mod = birthweight %>% 
+  mutate(
+    babysex = case_when(
+      babysex == 1 ~"male",
+      babysex == 2 ~"female"),
+    frace = case_when(
+      frace == 1 ~"white",
+      frace == 2 ~"black",
+      frace == 3 ~"asian",
+      frace == 4 ~"puerto_rican",
+      frace == 8 ~"other",
+      frace == 9 ~"unknown"),
+    mrace = case_when(
+      mrace == 1 ~"white",
+      mrace == 2 ~"black",
+      mrace == 3 ~"asian",
+      mrace == 4 ~"puerto_rican",
+      mrace == 8 ~"other"),
+    malform = case_when(
+      malform == 0 ~"absent",
+      malform == 1 ~"present")
+    )
+```
+
+```{r}
+bw_guess1 = lm(bwt ~ ., data = bw_mod) %>% 
+  broom::tidy()
+bw_guess2 = lm(
+  bwt ~ babysex + bhead + blength + delwt +gaweeks + parity + smoken, 
+  data = bw_mod)
+```
+
+```{r}
+guess = bw_mod %>% 
+  modelr::add_residuals(bw_guess2) %>%  
+  modelr::add_predictions(bw_guess2)
+guess %>% 
+ggplot(aes(x = resid,y=pred))+
+  geom_point()
+```
+
+We first fitted a linear model using all the possible predictors and then did a shortened version of backward elimination just to get a prelim model to work with.
+
+```{r}
+model_1 = lm(bwt ~ blength + gaweeks, data = bw_mod)
+model_2 = lm(bwt ~ bhead*blength*babysex, data = bw_mod)
+```
+
+```{r}
+cv_df =
+  crossv_mc(bw_mod, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+#Next I’ll use mutate + map & map2 to fit models to training data and obtain corresponding RMSEs for the testing data.
+cv_df = 
+  cv_df %>% 
+  mutate(
+    guess_mod  = 
+      map(train, ~lm(bwt ~ babysex + bhead + blength + delwt +gaweeks + parity + smoken, 
+                     data = .x)),
+    model_1  = 
+      map(train, ~lm(bwt ~ blength + gaweeks, 
+                     data = .x)),
+    model_2  = 
+      map(train, ~lm(bwt ~ bhead*blength*babysex, 
+                     data = as_tibble(.x)))) %>% 
+  mutate(rmse_guess = map2_dbl(guess_mod, test, ~rmse(model = .x, data = .y)),
+         rmse_model_1    = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+         rmse_model_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)))
+rmse_data = cv_df %>% 
+  select(starts_with("rmse")) %>% 
+pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model))
+rmse_data %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+Model 1 is a model using length at birth and gestational age as main effects predictors and model 2 is a model using head circumference, length, sex and all their internal interactions. Guess is the model using a very truncated verison of backward elimination.
+
+
 
