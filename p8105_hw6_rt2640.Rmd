@@ -1,7 +1,7 @@
 ---
 title: "p8105_HW6_rt2640"
 author: "Riddhi Thakkar"
-date: "11/30/2021"
+date: "12/06/2021"
 output: github_document
 ---
 
@@ -136,5 +136,65 @@ weather_df =
     tmax = tmax / 10) %>%
   select(name, id, everything())
 ```
+
+```{r}
+weather_boot = weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results)
+weather_boot %>% 
+  ggplot(aes(x=term,y=estimate))+
+  geom_point()
+```
+
+The estimates for $\hat\beta_1$ is rather consistent around 1 but the estimates for $\hat\beta_0$ deviates between 6-8
+
+```{r}
+weather_boot_base = weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ))
+weather_boot_tidy = weather_boot_base %>% 
+  mutate(
+    results = map(models, broom::tidy)
+  ) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  select(.id,term,estimate) %>% 
+  pivot_wider(
+    .id:estimate,
+    names_from = "term",
+    values_from = "estimate"
+  )
+  
+weather_boot_glance = weather_boot_base %>% 
+  mutate(
+    results_2 = map(models, broom::glance)
+  ) %>% 
+  select(-strap, -models) %>% 
+  unnest(results_2) %>% 
+  select(.id,adj.r.squared)
+boot_joined = left_join(weather_boot_tidy,weather_boot_glance, by = ".id") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    log_b0b1 = log(intercept*tmin)
+  )
+  
+boot_sum1 = boot_joined %>%  
+  summarize(
+    log_b0b1 = mean(log_b0b1),
+    adj_r_squared = mean(adj_r_squared)
+  )
+boot_sum2 = boot_joined %>% 
+  summarize(
+    std_log_b0b1 = sd(log_b0b1),
+    std_adj_r_squared = sd(adj_r_squared)
+  )
+```
+
+The 95% confidence interval for $Log(B_0*B_1)$ is (`r boot_sum1[1]-1.96*(boot_sum2[1]/sqrt(5000))`,`r boot_sum1[1]+1.96*(boot_sum2[1]/sqrt(5000))`) and the 95% confidence interval for $r^2$ is (`r boot_sum1[2]-1.96*(boot_sum2[2]/sqrt(5000))`,`r boot_sum1[2]+1.96*(boot_sum2[2]/sqrt(5000))`)
 
 
